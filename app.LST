@@ -1,0 +1,409 @@
+C51 COMPILER V8.08   APP                                                                   07/14/2021 01:03:30 PAGE 1   
+
+
+C51 COMPILER V8.08, COMPILATION OF MODULE APP
+OBJECT MODULE PLACED IN app.OBJ
+COMPILER INVOKED BY: C:\SiLabs\MCU\IDEfiles\C51\BIN\C51.exe app.c DB OE BR
+
+line level    source
+
+   1          #include "Main.h"
+   2          #include "Port.h"
+   3          #include "Led.h"
+   4          #include "buttons.h"
+   5          #include "seven_seg.h"
+   6          #include "Servo.h"
+   7          #include "ir.h"
+   8          #include <stdio.h>
+   9          
+  10          #define PWM_Period 0xB7FE
+  11          sbit Servo_Motor_Pin = P3^4;
+  12          float cycle[5] ={2.7 , 6.4 , 7.5 , 8.6 , 9.7} ;
+  13          unsigned int ON_Period, OFF_Period, DutyCycle;
+  14          unsigned int counter=0;
+  15          unsigned char floors[5]={ 0,0,0,0,0};
+  16          unsigned char up[5]={ 0,0,0,0,0};
+  17          unsigned char down[5]={ 0,0,0,0,0};
+  18          unsigned char up_sum = 0;
+  19          unsigned char down_sum = 0;
+  20          unsigned char selectedFloor = 0;
+  21          unsigned char currentFloor = 0;
+  22          unsigned char elevatorDirection = 1; // 0= down , 1= up
+  23          unsigned char moving = 0 ;
+  24          unsigned char check_door = 0; // 0= door closed , 1= door opened
+  25          void bringElevator();
+  26          void elevatorUp();
+  27          void elevatorDown();
+  28          void getDirection();
+  29          void setDirection(unsigned char x);
+  30          void moveElevator();
+  31          void pullDown(unsigned char requestFloor);
+  32          void pullUp(unsigned char requestFloor);
+  33          void checkOuterButtons();
+  34          unsigned char final_floor_up();
+  35          unsigned char final_floor_down();
+  36          void open_door();
+  37          void Set_DutyCycle_To(float duty_cycle);
+  38          
+  39          // void Delay_MS(unsigned int ms)
+  40          // {
+  41          //     unsigned int i;
+  42          //     unsigned int j;
+  43          //     for (i = 0; i < ms; i++)
+  44          //     {
+  45          //         for (j = 0; j < 120; j++)
+  46          //         {
+  47          //         }
+  48          //     }
+  49          // }
+  50          void Timer_init()
+  51          {
+  52   1          TMOD = 0x11;
+  53   1          TH0 = (PWM_Period >> 8);/* 20ms timer value */
+  54   1              TL0 = PWM_Period;
+  55   1          TR0 = 1;
+C51 COMPILER V8.08   APP                                                                   07/14/2021 01:03:30 PAGE 2   
+
+  56   1          TL1 = 0x00;
+  57   1          TH1 = 0x00;
+  58   1          TR1 = 1;
+  59   1      }
+  60          // (void) interrupt 1
+  61          // void Check_buttons(void) interrupt 3
+  62          
+  63          // {
+  64          //     // LED_Toggle(LED_1);
+  65          //     // LED_Toggle(LED_2);
+  66          //     // Delay_MS(400);
+  67          //     // LED_Toggle(LED_1);
+  68          //     // LED_Toggle(LED_2);
+  69          //     // TR0 = 0;
+  70          
+  71          //         unsigned char i = 0; 
+  72          
+  73          //         if (!button_read(BUTTON_G_PORT_DR, BUTTON_G_PIN))
+  74          //         {   
+  75          //             floors[0] = 1;
+  76          //             selectedFloor = 0;
+  77          //             getDirection();
+  78          //         }
+  79          //         if (!button_read(BUTTON_1_PORT_DR, BUTTON_1_PIN))
+  80          //         {
+  81          //             floors[1] = 1;
+  82          //             selectedFloor = 1;
+  83          //             getDirection();
+  84          //         }
+  85          //         if (!button_read(BUTTON_2_PORT_DR, BUTTON_2_PIN))
+  86          //         {
+  87          //             floors[2] = 1;
+  88          //             selectedFloor = 2;
+  89          //             getDirection();
+  90          //         }
+  91          //         if (!button_read(BUTTON_3_PORT_DR, BUTTON_3_PIN))
+  92          //         {   
+  93          //             floors[3] = 1;
+  94          //             selectedFloor = 3;
+  95          //             getDirection();
+  96          //         }
+  97          //         if (!button_read(BUTTON_4_PORT_DR, BUTTON_4_PIN))
+  98          //         {   
+  99          //             floors[4] = 1;
+ 100          //             selectedFloor = 4;
+ 101          //             getDirection();
+ 102          //         }
+ 103          
+ 104          //         if (!button_read(BUTTON_GUP_PORT_DR, BUTTON_GUP_PIN)) //G up
+ 105          //         {
+ 106          //             down[0] = 1;
+ 107          //             selectedFloor = 0;
+ 108          //             setDirection(0);
+ 109          //         }
+ 110          
+ 111          //         if (!button_read(BUTTON_1UP_PORT_DR, BUTTON_1UP_PIN)) // 1up
+ 112          //         {
+ 113          
+ 114          //             up[1] = 1;
+ 115          //             selectedFloor = 1;
+ 116          //             setDirection(1);
+ 117          //         }
+C51 COMPILER V8.08   APP                                                                   07/14/2021 01:03:30 PAGE 3   
+
+ 118          //         if (!button_read(BUTTON_2UP_PORT_DR, BUTTON_2UP_PIN)) // 2up
+ 119          //         {
+ 120          
+ 121          //             up[2] = 1;
+ 122          //             selectedFloor = 2;
+ 123          //             setDirection(1);
+ 124          //         }
+ 125          //         if (!button_read(BUTTON_3UP_PORT_DR, BUTTON_3UP_PIN)) // 3up
+ 126          //         {
+ 127          
+ 128          //             up[3] = 1;
+ 129          //             selectedFloor = 3;
+ 130          //             setDirection(1);
+ 131          //         }
+ 132          
+ 133          //         if (!button_read(BUTTON_1DOWN_PORT_DR, BUTTON_1DOWN_PIN)) // 1down
+ 134          //         {
+ 135          
+ 136          //             down[1] = 1;
+ 137          //             selectedFloor = 1;
+ 138          //             setDirection(0);
+ 139          //         }
+ 140          
+ 141          //         if (!button_read(BUTTON_2DOWN_PORT_DR, BUTTON_2DOWN_PIN)) // 2down
+ 142          //         {
+ 143          //             down[2] = 1;
+ 144          //             selectedFloor = 2;
+ 145          //             setDirection(0);
+ 146          //         }
+ 147          
+ 148          //         if (!button_read(BUTTON_3DOWN_PORT_DR, BUTTON_3DOWN_PIN)) // 3down
+ 149          //         {
+ 150          //             down[3] = 1;
+ 151          //             selectedFloor = 3;
+ 152          //             setDirection(0);
+ 153          //         }
+ 154          
+ 155          //         if (!button_read(BUTTON_4DOWN_PORT_DR, BUTTON_4DOWN_PIN)) // 4down
+ 156          //         {
+ 157          //             up[4] = 1;
+ 158          //             selectedFloor = 4;
+ 159          //             setDirection(1);
+ 160          //         }
+ 161          // up_sum = 0;
+ 162          // down_sum =0;
+ 163          // for (i ; i <= 4; i++)
+ 164          //     {
+ 165          //         up_sum = up_sum + up[i];
+ 166          //         down_sum = down_sum + down[i];
+ 167          //     }        
+ 168          // }
+ 169          
+ 170          void Timer0_ISR(void) interrupt 1       
+ 171          {
+ 172   1              Servo_Motor_Pin = !Servo_Motor_Pin;
+ 173   1              if(Servo_Motor_Pin)
+ 174   1              {
+ 175   2                      TH0 = (ON_Period >> 8);
+ 176   2                      TL0 = ON_Period;
+ 177   2              }       
+ 178   1              else
+ 179   1              {
+C51 COMPILER V8.08   APP                                                                   07/14/2021 01:03:30 PAGE 4   
+
+ 180   2                      TH0 = (OFF_Period >> 8);
+ 181   2                      TL0 = OFF_Period;
+ 182   2              }       
+ 183   1                              
+ 184   1      }
+ 185          
+ 186          // void wait_door(void) interrupt 0
+ 187          // {
+ 188          
+ 189          // if(check_door)
+ 190          //     Delay_MS(2000);
+ 191          // }
+ 192          
+ 193          void main()
+ 194          {
+ 195   1      
+ 196   1          // diable the watch dog
+ 197   1          WDTCN = 0x0DE;
+ 198   1          WDTCN = 0x0AD;
+ 199   1      
+ 200   1          OSCICN = 0x014; // 2MH clock
+ 201   1          // config cross bar
+ 202   1          XBR0 = 0x00;
+ 203   1          XBR1 = 0x14; // enable interrupt crossbar
+ 204   1          XBR2 = 0x40;  // Cross bar enabled , weak Pull-up enabled
+ 205   1      
+ 206   1          EA = 1;  //enable global interrupt
+ 207   1          EX0 = 1; // enable external interrupt 0
+ 208   1          EX1 = 1; //enable external interrupt 1
+ 209   1          IT0 = 1;
+ 210   1          IT1 = 1;
+ 211   1      
+ 212   1          ET0 = 1; //enable interrupt of timer0
+ 213   1          ET1 = 1; //enable interrupt of timer1
+ 214   1          Buzzer_init();
+ 215   1          IR_init();
+ 216   1          Timer_init();
+ 217   1          sevenSegment_write(0);
+ 218   1          //ET1 = 1; //enable interrupt of timer1
+ 219   1      
+ 220   1          // TL1 = 0xfb;
+ 221   1          // TH1 = 0xff;
+ 222   1          SERVO_Init();
+ 223   1          // LED_Init(LED_1, LED_OFF);
+ 224   1          // LED_Init(LED_2, LED_ON);
+ 225   1          // BUTTON_Init(BUTTON_OPEN);
+ 226   1      
+ 227   1          // Initialization of outside buttons
+ 228   1          button_init(BUTTON_4DOWN_PORT_CR, BUTTON_4DOWN_PIN);
+ 229   1          button_init(BUTTON_3DOWN_PORT_CR, BUTTON_3DOWN_PIN);
+ 230   1          button_init(BUTTON_3UP_PORT_CR, BUTTON_3UP_PIN);
+ 231   1          button_init(BUTTON_2DOWN_PORT_CR, BUTTON_2DOWN_PIN);
+ 232   1          button_init(BUTTON_2UP_PORT_CR, BUTTON_2UP_PIN);
+ 233   1          button_init(BUTTON_1DOWN_PORT_CR, BUTTON_1DOWN_PIN);
+ 234   1          button_init(BUTTON_1UP_PORT_CR, BUTTON_1UP_PIN);
+ 235   1          button_init(BUTTON_GUP_PORT_CR, BUTTON_GUP_PIN);
+ 236   1      
+ 237   1          // initialization of inside buttons
+ 238   1          button_init(BUTTON_4_PORT_CR, BUTTON_4_PIN);
+ 239   1          button_init(BUTTON_3_PORT_CR, BUTTON_3_PIN);
+ 240   1          button_init(BUTTON_2_PORT_CR, BUTTON_2_PIN);
+ 241   1          button_init(BUTTON_1_PORT_CR, BUTTON_1_PIN);
+C51 COMPILER V8.08   APP                                                                   07/14/2021 01:03:30 PAGE 5   
+
+ 242   1          button_init(BUTTON_G_PORT_CR, BUTTON_G_PIN);
+ 243   1      
+ 244   1          // initialization of seven segment
+ 245   1          sevenSegment_init(sevenSeg_PORT_CR);
+ 246   1      
+ 247   1          while (1)
+ 248   1          { // assume the door is open.
+ 249   2           if (GPIO_ReadPortPin(GPIO_PORT2_DATA,GPIO_PIN_6)==1)
+ 250   2           {
+ 251   3                counter=counter+1;
+ 252   3           }
+ 253   2           if (GPIO_ReadPortPin(GPIO_PORT2_DATA,GPIO_PIN_7)==1 && counter!=0)
+ 254   2           {
+ 255   3               counter=counter-1;
+ 256   3           }
+ 257   2           if(counter>4)
+ 258   2           {
+ 259   3                Buzzer_toggle();
+ 260   3           }
+ 261   2             // moveElevator();
+ 262   2              // bringElevator();
+ 263   2              // Check_buttons();
+ 264   2          }
+ 265   1      }
+ 266          
+ 267          
+ 268          // void moveElevator()
+ 269          // {
+ 270          
+ 271          //     // elevatorDirection = getDirection(); // return 1 OR 0
+ 272          //     if(selectedFloor != currentFloor)
+ 273          //     {
+ 274          
+ 275          //     if (elevatorDirection == 1)
+ 276          //         elevatorUp();
+ 277          
+ 278          //     else
+ 279          //         elevatorDown();
+ 280          //     }
+ 281          // }
+ 282          
+ 283          // void getDirection()
+ 284          // {
+ 285          // if(selectedFloor != currentFloor)
+ 286          //         {
+ 287          //             if(selectedFloor > currentFloor)
+ 288          //             {
+ 289          //                 up[selectedFloor] = 1;
+ 290          //                 elevatorDirection = 1;
+ 291          
+ 292          //             }
+ 293          //             else 
+ 294          //             {
+ 295          //                 down[selectedFloor] = 1;
+ 296          //                 elevatorDirection = 0;
+ 297          //             }
+ 298          //         }
+ 299          
+ 300          // }
+ 301          // void setDirection(unsigned char x)
+ 302          // {
+ 303          //     if(moving == 0)
+C51 COMPILER V8.08   APP                                                                   07/14/2021 01:03:30 PAGE 6   
+
+ 304          //         elevatorDirection = x;
+ 305          
+ 306          // }
+ 307          
+ 308          // void elevatorUp()
+ 309          // {
+ 310          //     int floor = final_floor_up();
+ 311          //     int i = currentFloor;
+ 312          //     for (i ; i <= floor && (i != 5); i++)
+ 313          //     {
+ 314          //         // cycle = cycle + 2;
+ 315          //         // elevator up using dc motor
+ 316          //         moving = 1;
+ 317          //         sevenSegment_write(i); //print current floor on 7Seg
+ 318          //         Set_DutyCycle_To(cycle[i]);
+ 319          //         currentFloor = i;
+ 320          //         Delay_MS(250);
+ 321          //         // bringElevator();
+ 322          //         if (up[i] == 1)
+ 323          //         {   
+ 324          //             up[i] = 0;
+ 325          //             open_door();
+ 326          //         }
+ 327                      
+ 328          //     }
+ 329          //     moving = 0;
+ 330          //     if(down_sum != 0)
+ 331          //         elevatorDown();
+ 332          
+ 333          //     //open door( check if current floor = selected floor );
+ 334          // }
+ 335          
+ 336          // void elevatorDown()
+ 337          // {
+ 338              
+ 339          //     int floor = final_floor_down();
+ 340          //     int i = currentFloor;
+ 341          //     for (i; i >= floor; i--)
+ 342          //     {
+ 343          //         moving = 1;
+ 344          //         // cycle = cycle - 2;
+ 345          //         // elevator down using dc motor
+ 346          //         sevenSegment_write(i); //print current floor on 7Seg
+ 347          //         Set_DutyCycle_To(cycle[i]);
+ 348          //         currentFloor = i;
+ 349          //         Delay_MS(250);
+ 350          //         if (down[i] == 1)
+ 351          //         {
+ 352          //             down[i] = 0;
+ 353          //             open_door();
+ 354          //         }
+ 355          //         // bringElevator();
+ 356          
+ 357          //     }
+ 358          //     moving = 0;
+ 359          //     if(up_sum != 0)
+ 360          //         elevatorUp();
+ 361          //     //open door( check if movingFlag = 0 );
+ 362          // }
+ 363          
+ 364          // u
+ 365          
+C51 COMPILER V8.08   APP                                                                   07/14/2021 01:03:30 PAGE 7   
+
+ 366          // void Set_DutyCycle_To(float duty_cycle)
+ 367          // {
+ 368          //      float period = 65535 - PWM_Period;
+ 369          //      ON_Period = ((period/100.0) * duty_cycle);
+ 370          //      OFF_Period = (period - ON_Period);      
+ 371          //      ON_Period = 65535 - ON_Period;  
+ 372          //      OFF_Period = 65535 - OFF_Period;
+ 373          
+ 374          // }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    255    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     50    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
